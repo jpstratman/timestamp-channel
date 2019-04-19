@@ -161,6 +161,11 @@ class CovertChannel:
         data_chunks = list(chunk_list(encoded_data, STORABLE_BYTES_PER_FILE))
 
         remaining_chunks = len(data_chunks)
+
+        if remaining_chunks > int('9'*DIGITS_FOR_INDEX) - 1:
+            raise Exception('Can only store up to {} files worth of data, need {}'.format(
+                int('9'*DIGITS_FOR_INDEX) - 1, remaining_chunks))
+
         for c in data_chunks:
             s = str(int_from_bytes(c))
 
