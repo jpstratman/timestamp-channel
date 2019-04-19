@@ -2,7 +2,7 @@
 
 """
 Author: Jason Stratman
-Storage covert channel file timestamp implementation.
+Storage covert channel steganography file timestamp implementation.
 """
 
 import math
@@ -167,13 +167,13 @@ class CovertChannel:
             if len(s) > STORABLE_DIGITS_PER_FILE:
                 raise Exception('Data too long: {}'.format(len(s)))
 
-            if index == 0 or index % int('9'*DIGITS_FOR_INDEX) == 0:
+            if index == 0 or index == int('9'*DIGITS_FOR_INDEX) - 1:
                 # Index chunk indicates the number of files
                 index_string = CovertChannel.prepend_chunk(
                     str(0), str(remaining_chunks))
                 int_str_chunks.append(index_string)
                 index = 1
-                remaining_chunks -= int('9'*DIGITS_FOR_INDEX)
+                remaining_chunks -= (int('9'*DIGITS_FOR_INDEX) - 1)
 
             data_string = CovertChannel.prepend_chunk(str(index), s)
             int_str_chunks.append(data_string)
@@ -194,7 +194,17 @@ class CovertChannel:
             path = file[1]
             ctimestamp = file[0]
             change_file_creation_time(
-                path, ctimestamp.replace(microsecond=random.randint(100000, 999999)))
+                path, ctimestamp.replace(microsecond=999999))
+
+            atime_ns = file[2]
+            mtime_ns = file[3]
+            # ms through hundred ns places (7 values)
+            new_atime_ns = floor_billionths(
+                atime_ns) + (9999999 * 100)
+            # ms through hundred ns places (7 values)
+            new_mtime_ns = floor_billionths(
+                mtime_ns) + (9999999 * 100)
+            os.utime(path, ns=(new_atime_ns, new_mtime_ns))
 
         # Choose random offset to start at
         offset = random.randint(
@@ -220,10 +230,10 @@ class CovertChannel:
             new_mtime_ns = floor_billionths(
                 mtime_ns) + (int(c[10:17]) * 100)
 
-            os.utime(path, ns=(new_atime_ns, new_mtime_ns))
-
             change_file_creation_time(
                 path, ctime.replace(microsecond=new_ctime))
+
+            os.utime(path, ns=(new_atime_ns, new_mtime_ns))
 
             files_count += 1
 
@@ -267,9 +277,11 @@ class CovertChannel:
                     byte = bytearray(int_to_bytes(
                         int(string[DIGITS_FOR_INDEX:])))
 
-                    byte = CovertChannel.pad_byte(byte)
+                    newbyte = bytes(byte)
+                    while len(newbyte) < STORABLE_BYTES_PER_FILE:
+                        newbyte = b'\x00' + bytes(newbyte)
 
-                    encoded_data += byte
+                    encoded_data += bytearray(newbyte)
                     next_index += 1
                 else:
                     break
